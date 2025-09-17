@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>កម្មវិធីកត់ត្រាវត្តមានបុគ្គលិកDI</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Koulen&family=Battambang:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>កត់ត្រាម៉ោងសម្រាក</h1>
+            <p id="current-date"></p>
+        </header>
+
+        <main>
+            <div class="card selection-card">
+                <div class="form-group">
+                    <label for="employee-input">ជ្រើសរើសបុគ្គលិក (ពេលចេញទៅក្រៅ)</label>
+                    <input type="text" id="employee-input" list="employee-list-data" placeholder="វាយ ឬជ្រើសរើសឈ្មោះ...">
+                    <datalist id="employee-list-data"></datalist>
+                </div>
+            </div>
+
+            <div class="card records-card">
+                <h2>បញ្ជីបុគ្គលិកកំពុងសម្រាក</h2>
+                <div class="form-group">
+                     <input type="text" id="filter-input" list="active-break-list" placeholder="ស្វែងរកក្នុងបញ្ជី...">
+                     <datalist id="active-break-list"></datalist>
+                </div>
+                <div id="employee-records-container">
+                    </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="loader" class="loader-overlay" style="display: none;">
+        <div class="loader"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
