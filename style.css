@@ -1,0 +1,149 @@
+:root {
+    --primary-color: #0d6efd;
+    --primary-color-darker: #0b5ed7;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --secondary-color: #6c757d;
+    --light-color: #f8f9fa;
+    --dark-color: #212529;
+    --border-color: #dee2e6;
+    --card-bg: #ffffff;
+    --font-heading: 'Koulen', sans-serif;
+    --font-body: 'Battambang', serif;
+    --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --box-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    margin: 0; padding: 20px;
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container { width: 100%; max-width: 700px; }
+header { text-align: center; margin-bottom: 2rem; }
+header h1 { 
+    font-family: var(--font-heading); 
+    color: var(--primary-color); 
+    font-size: 2.5rem; 
+    margin: 0;
+    cursor: pointer; /* Make main title clickable */
+    transition: color 0.3s ease;
+}
+header h1:hover {
+    color: var(--primary-color-darker);
+}
+header p { font-size: 1.1rem; color: #6c757d; }
+
+.card {
+    background-color: var(--card-bg); border-radius: 12px; box-shadow: var(--box-shadow);
+    padding: 25px; margin-bottom: 25px; transition: box-shadow 0.3s ease;
+}
+.selection-card {
+    transition: all 0.5s ease-in-out; transform-origin: top;
+}
+.card:hover { box-shadow: var(--box-shadow-hover); }
+.card h2 {
+    font-family: var(--font-heading); margin-top: 0; margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color); padding-bottom: 15px;
+}
+.records-card h2 {
+    cursor: pointer; /* Make records card title clickable */
+    transition: color 0.3s ease;
+}
+.records-card h2:hover {
+    color: var(--primary-color);
+}
+.form-group { 
+    margin-bottom: 15px;
+    transition: all 0.4s ease-in-out; 
+    transform-origin: top;
+}
+
+#employee-input, #filter-input {
+    width: 100%; padding: 12px; font-family: var(--font-body); font-size: 1rem;
+    border: 1px solid var(--border-color); border-radius: 8px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+#employee-input:focus, #filter-input:focus {
+    outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
+}
+#employee-records-container { display: flex; flex-direction: column; gap: 15px; }
+
+/* Employee Record Styling */
+.employee-record {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 20px;
+    padding: 15px; border: 2px solid var(--border-color); border-radius: 10px;
+    align-items: center; animation: fadeInDown 0.5s ease-out forwards; opacity: 0;
+    transition: border-color 0.5s ease, background-color 0.5s ease;
+}
+.employee-photo { flex-shrink: 0; width: 60px; height: 60px; }
+.employee-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 2px solid var(--border-color); }
+.employee-info { flex-grow: 1; }
+.employee-info h4 { margin: 0 0 5px 0; font-family: var(--font-heading); font-size: 1.2rem; }
+.employee-info p { margin: 0; font-size: 0.85rem; color: #6c757d; line-height: 1.6; }
+.employee-info p strong { color: var(--dark-color); }
+
+.employee-actions { display: flex; gap: 10px; }
+.btn {
+    border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;
+    font-family: var(--font-heading); font-size: 1rem; color: white;
+    transition: transform 0.2s, background-color 0.2s;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn-check-in { background-color: var(--success-color); }
+.btn-check-in:hover { background-color: #157347; }
+.btn-delete { background-color: var(--secondary-color); }
+.btn-delete:hover { background-color: #5a6268; }
+.btn:disabled { background-color: #9db0c1; cursor: not-allowed; transform: none; }
+
+.employee-record.completed { background-color: #e6f9f0; border-color: var(--success-color) !important; }
+
+/* Overdue Alert Styling */
+.overdue-status {
+    display: none; align-items: center; gap: 5px; font-weight: 700;
+    color: var(--danger-color); margin-top: 5px; font-size: 0.8rem;
+}
+.overdue-status::before { content: '⏰'; font-size: 0.9rem; }
+.employee-record.overdue .overdue-status { display: flex; }
+.employee-record.overdue { border-color: var(--danger-color); }
+
+/* Hide Animation Class */
+.hidden {
+    opacity: 0; transform: scaleY(0); max-height: 0px; padding: 0;
+    margin: 0; border-width: 0; overflow: hidden;
+}
+
+/* Animations */
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Loader Styles */
+.loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid var(--primary-color); width: 60px; height: 60px; animation: spin 1s linear infinite; }
+
+
+/* RESPONSIVE DESIGN FOR MOBILE */
+@media (max-width: 700px) {
+    body { padding: 10px; }
+    header h1 { font-size: 2rem; }
+    #current-date { display: none; }
+    .card { padding: 15px; }
+    .employee-record {
+        grid-template-columns: auto 1fr;
+        grid-template-areas: "photo info" "actions actions";
+        row-gap: 12px; column-gap: 12px; padding: 12px;
+    }
+    .employee-photo { grid-area: photo; width: 45px; height: 45px; }
+    .employee-info { grid-area: info; }
+    .employee-info h4 { font-size: 1rem; }
+    .employee-info p { font-size: 0.75rem; line-height: 1.5; }
+    .employee-actions { grid-area: actions; width: 100%; }
+    .employee-actions .btn {
+        flex-grow: 1; text-align: center; font-size: 0.85rem; padding: 10px 8px;
+    }
+}
