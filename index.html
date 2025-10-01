@@ -137,7 +137,7 @@
         /* Face Scanner Modal Styles */
         #face-scanner-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.7);
+            background-color: rgba(0,0,0,0.8);
             display: none;
             justify-content: center; align-items: center; z-index: 2000;
         }
@@ -145,14 +145,54 @@
             background: white; padding: 20px; border-radius: 12px; text-align: center;
             max-width: 90%; width: 500px; position: relative;
         }
-        #video-container { position: relative; width: 100%; }
-        #face-video { width: 100%; border-radius: 8px; }
-        #face-canvas { position: absolute; top: 0; left: 0; }
+        #video-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid var(--info-color);
+            box-shadow: 0 0 20px rgba(13, 202, 240, 0.7);
+            animation: pulse-glow 2s infinite alternate;
+        }
+        #video-container::after {
+            content: '';
+            position: absolute;
+            top: -100%;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 48%, rgba(0, 255, 255, 0.7) 50%, rgba(255,255,255,0.1) 52%, rgba(255,255,255,0) 100%);
+            animation: scan-effect 3s linear infinite;
+            z-index: 2;
+        }
+        #face-video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover;
+        }
+        #face-canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0;
+            z-index: 3;
+        }
         #close-face-modal {
             position: absolute; top: 10px; right: 15px; font-size: 2rem;
             cursor: pointer; color: var(--secondary-color);
+            z-index: 4;
         }
         #face-scanner-container p { font-size: 1rem; color: var(--dark-color); }
+
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 10px rgba(13, 202, 240, 0.5); }
+            to { box-shadow: 0 0 30px rgba(13, 202, 240, 1), 0 0 10px rgba(255, 255, 255, 0.5) inset; }
+        }
+        @keyframes scan-effect {
+            0% { transform: translateY(0%); }
+            100% { transform: translateY(200%); }
+        }
 
         @media (max-width: 700px) {
             body { padding: 10px; }
@@ -172,6 +212,7 @@
             .employee-actions .btn {
                 flex-grow: 1; text-align: center; font-size: 0.85rem; padding: 10px 8px;
             }
+            #video-container { width: 250px; height: 250px; }
         }
     </style>
 </head>
@@ -415,10 +456,7 @@
                     faceVideo.addEventListener('play', () => {
                         const displaySize = { width: faceVideo.clientWidth, height: faceVideo.clientHeight };
                         faceapi.matchDimensions(faceCanvas, displaySize);
-                        
-                        const drawBox = new faceapi.draw.DrawBox(resizedDetections[0].detection.box, { label: bestMatch.toString() });
-                        drawBox.draw(faceCanvas);
-                        
+                                              
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
                             const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptors();
@@ -427,13 +465,16 @@
                             context.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
                             
                             if (detections.length > 0) {
-                                const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
+                                // Only consider the largest face detected
+                                const largestDetection = resizedDetections.sort((a,b) => b.detection.box.area - a.detection.box.area)[0];
+                                const bestMatch = faceMatcher.findBestMatch(largestDetection.descriptor);
                                 
                                 // Draw feedback on canvas
-                                const box = resizedDetections[0].detection.box;
+                                const box = largestDetection.detection.box;
                                 const drawOptions = {
                                     label: bestMatch.toString(),
-                                    boxColor: bestMatch.label === 'unknown' ? 'red' : 'green'
+                                    boxColor: bestMatch.label === 'unknown' ? 'red' : 'green',
+                                    drawLabel: true
                                 };
                                 const drawBox = new faceapi.draw.DrawBox(box, drawOptions);
                                 drawBox.draw(faceCanvas);
@@ -463,7 +504,7 @@
 
                 } catch (err) {
                     console.error("Error accessing camera: ", err);
-                    alert("មិនអាចបើកកាមេរ៉ាបានទេ។ សូមពិនិត្យការអនុញ្ញាត (Permission)។");
+                    alert("មិនអាចបើកកាមេរ៉ាបានទេ។ សូមពិនិត្យการអនុញ្ញាត (Permission)។");
                 }
             };
             
