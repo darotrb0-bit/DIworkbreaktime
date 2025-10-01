@@ -65,6 +65,12 @@
             transition: all 0.4s ease-in-out; 
             transform-origin: top;
         }
+        
+        .scan-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
 
         #employee-input, #filter-input {
             width: 100%; padding: 12px; font-family: var(--font-body); font-size: 1rem;
@@ -93,6 +99,7 @@
             border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;
             font-family: var(--font-heading); font-size: 1rem; color: white;
             transition: transform 0.2s, background-color 0.2s;
+            flex-grow: 1;
         }
         .btn:hover { transform: translateY(-2px); }
         .btn-check-in { background-color: var(--success-color); }
@@ -101,8 +108,7 @@
         .btn-delete:hover { background-color: #5a6268; }
         .btn-scan {
             background-color: var(--info-color);
-            width: 100%;
-            margin-top: 10px;
+            margin-top: 0;
         }
         .btn-scan:hover { background-color: var(--info-color-darker); }
         .btn:disabled { background-color: #9db0c1; cursor: not-allowed; transform: none; }
@@ -121,6 +127,15 @@
             opacity: 0; transform: scaleY(0); max-height: 0px; padding: 0;
             margin: 0; border-width: 0; overflow: hidden;
         }
+
+        /* Toggle Switch for Live Camera */
+        .live-mode-toggle { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary-color); }
+        input:checked + .slider:before { transform: translateX(26px); }
 
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -155,6 +170,11 @@
             border: 3px solid var(--info-color);
             box-shadow: 0 0 20px rgba(13, 202, 240, 0.7);
             animation: pulse-glow 2s infinite alternate;
+            transition: border-color 0.5s;
+        }
+        #video-container.success-flash {
+            border-color: var(--success-color);
+            box-shadow: 0 0 30px rgba(25, 135, 84, 1);
         }
         #video-container::after {
             content: '';
@@ -166,6 +186,20 @@
             background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 48%, rgba(0, 255, 255, 0.7) 50%, rgba(255,255,255,0.1) 52%, rgba(255,255,255,0) 100%);
             animation: scan-effect 3s linear infinite;
             z-index: 2;
+        }
+        #scan-message-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1rem;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s;
         }
         #face-video { 
             width: 100%; 
@@ -182,6 +216,14 @@
             position: absolute; top: 10px; right: 15px; font-size: 2rem;
             cursor: pointer; color: var(--secondary-color);
             z-index: 4;
+        }
+        #switch-camera-btn {
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--secondary-color);
+            flex-grow: 0; /* Override btn class */
         }
         #face-scanner-container p { font-size: 1rem; color: var(--dark-color); }
 
@@ -227,12 +269,19 @@
         <main>
             <div class="card selection-card">
                 <div class="form-group">
-                    <label for="employee-input">ជ្រើសរើសបុគ្គលិក (ពេលចេញទៅក្រៅ)</label>
+                    <label for="employee-input">ជ្រើសរើសបុគ្គលិកដោយដៃ</label>
                     <input type="text" id="employee-input" list="employee-list-data" placeholder="វាយបញ្ចូល ឬជ្រើសរើសឈ្មោះ...">
                     <datalist id="employee-list-data"></datalist>
                 </div>
-                 <div class="form-group">
-                    <button id="scan-face-btn" class="btn btn-scan" disabled>កំពុងរៀបចំប្រព័ន្ធសម្គាល់ផ្ទៃមុខ...</button>
+                 <div class="form-group scan-controls">
+                    <button id="scan-face-btn" class="btn btn-scan" disabled>កំពុងរៀបចំ...</button>
+                    <div class="live-mode-toggle">
+                        <label class="switch">
+                          <input type="checkbox" id="live-mode-checkbox">
+                          <span class="slider"></span>
+                        </label>
+                        <span>កាមេរ៉ាផ្ទាល់</span>
+                      </div>
                 </div>
             </div>
 
@@ -260,61 +309,73 @@
             <div id="video-container">
                 <video id="face-video" playsinline autoplay muted></video>
                 <canvas id="face-canvas"></canvas>
+                 <div id="scan-message-overlay"></div>
             </div>
+            <button id="switch-camera-btn" class="btn">ប្តូរកាមេរ៉ា</button>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            
             // --- CONFIGURATION ---
-            const SHEET_ID = '1_Kgl8UQXRsVATt_BOHYQjVWYKkRIBA12R-qnsBoSUzc';
-            const SHEET_NAME = 'បញ្ជឺឈ្មោះរួម';
-            const RANGE = 'E9:AA';
+            const SHEET_ID = '1eRyPoifzyvB4oBmruNyXcoKMKPRqjk6xDD6-bPNW6pc';
+            const SHEET_NAME = 'DIList';
+            const RANGE = 'E9:AI';
             const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=${RANGE}`;
             const WRITE_URL = 'https://script.google.com/macros/s/AKfycbxCekjXECxkU-hmWzik1wChzCF7YpWxb7ZA1RHazuxMaUInNRU2nZoe7uh0sdzkXxr6/exec';
             const STORAGE_KEY = 'activeBreaks';
-            const FACE_DESCRIPTORS_KEY = 'faceDescriptorsCache';
             const DEFAULT_AVATAR = 'https://i.stack.imgur.com/34AD2.jpg';
             const OVERDUE_MINUTES = 15;
-            const CONSECUTIVE_MATCHES_REQUIRED = 3; // Require 3 consecutive matches
+            const CONSECUTIVE_MATCHES_REQUIRED = 3;
 
             // --- DOM ELEMENTS ---
-            const mainTitle = document.querySelector('header h1');
             const employeeInput = document.getElementById('employee-input');
             const employeeDatalist = document.getElementById('employee-list-data');
             const currentDateDisplay = document.getElementById('current-date');
             const recordsContainer = document.getElementById('employee-records-container');
-            const filterInput = document.getElementById('filter-input');
-            const filterBoxContainer = document.querySelector('.records-card .form-group');
-            const recordsCardTitle = document.querySelector('.records-card h2');
-            const activeBreakDatalist = document.getElementById('active-break-list');
             const loader = document.getElementById('loader');
             const loaderMessage = document.getElementById('loader-message');
-            const selectionCard = document.querySelector('.selection-card');
             const scanFaceBtn = document.getElementById('scan-face-btn');
             const faceScannerModal = document.getElementById('face-scanner-modal');
             const closeFaceModalBtn = document.getElementById('close-face-modal');
+            const switchCameraBtn = document.getElementById('switch-camera-btn');
             const faceVideo = document.getElementById('face-video');
             const faceCanvas = document.getElementById('face-canvas');
+            const liveModeCheckbox = document.getElementById('live-mode-checkbox');
+            const scanMessageOverlay = document.getElementById('scan-message-overlay');
+            const videoContainer = document.getElementById('video-container');
 
             // --- STATE VARIABLES ---
-            let employeeData = [];
-            let inactivityTimer;
-            let filterInactivityTimer;
+            let allEmployeeData = [];
+            let activeEmployeeData = [];
             let videoStream;
             let faceMatcher;
             let faceScanInterval;
             let isFaceApiReady = false;
-            let matchBuffer = []; // Buffer for consecutive matches
+            let matchBuffer = [];
+            let currentFacingMode = 'environment';
+            let isLiveModeActive = false;
+            let isScanningPaused = false;
 
             // --- HELPER FUNCTIONS ---
             const showLoader = (show, message = '') => {
                 loaderMessage.textContent = message;
                 loader.style.display = show ? 'flex' : 'none';
             };
+
             const getBreaksFromStorage = () => JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
             const saveBreaksToStorage = (breaks) => localStorage.setItem(STORAGE_KEY, JSON.stringify(breaks));
+
+            const speak = (text) => {
+                if ('speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'km-KH';
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+            window.speechSynthesis.onvoiceschanged = () => console.log("Voices loaded.");
 
             // --- UI & DATE FUNCTIONS ---
             const setKhmerDate = () => {
@@ -325,24 +386,10 @@
                 const toKhmerNumeral = (num) => String(num).split('').map(d => khmerNumerals[d]).join('');
                 currentDateDisplay.textContent = `ថ្ងៃ${days[now.getDay()]} ទី${toKhmerNumeral(now.getDate())} ខែ${months[now.getMonth()]} ឆ្នាំ${toKhmerNumeral(now.getFullYear())}`;
             };
-
-            const hideSelectionCard = () => selectionCard.classList.add('hidden');
-            const showSelectionCard = () => selectionCard.classList.remove('hidden');
-            const resetInactivityTimer = () => {
-                clearTimeout(inactivityTimer);
-                inactivityTimer = setTimeout(hideSelectionCard, 10000);
-            };
-
-            const hideFilterBox = () => filterBoxContainer.classList.add('hidden');
-            const showFilterBox = () => filterBoxContainer.classList.remove('hidden');
-            const resetFilterTimer = () => {
-                clearTimeout(filterInactivityTimer);
-                filterInactivityTimer = setTimeout(hideFilterBox, 10000);
-            };
-
+            
             const checkOverdueBreaks = () => {
-                const breaks = getBreaksFromStorage();
                 const now = new Date();
+                const breaks = getBreaksFromStorage();
                 breaks.forEach(breakEntry => {
                     const recordDiv = recordsContainer.querySelector(`.employee-record[data-id="${breakEntry.id}"]`);
                     if (recordDiv) {
@@ -361,13 +408,24 @@
                 });
             };
 
-            // --- FACE RECOGNITION FUNCTIONS (OPTIMIZED & DETAILED) ---
+             const showScanOverlayMessage = (message) => {
+                scanMessageOverlay.textContent = message;
+                scanMessageOverlay.style.opacity = '1';
+                videoContainer.classList.add('success-flash');
+
+                setTimeout(() => {
+                    scanMessageOverlay.style.opacity = '0';
+                    videoContainer.classList.remove('success-flash');
+                }, 2500);
+            };
+
+            // --- FACE RECOGNITION FUNCTIONS ---
             async function loadFaceApiModels() {
                 showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ...');
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // For accurate initial detection
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL), // For fast real-time detection
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
@@ -376,24 +434,29 @@
             }
 
             async function getOrCreateFaceMatcher(employeeList) {
-                if (!isFaceApiReady) return;
+                if (!isFaceApiReady || employeeList.length === 0) return;
+                
+                const today = new Date();
+                const shift = today.getHours() < 12 ? 'morning' : 'afternoon';
+                const dateString = today.toISOString().split('T')[0];
+                const cacheKey = `faceDescriptors-${dateString}-${shift}`;
+                const cachedData = localStorage.getItem(cacheKey);
 
-                const cachedData = localStorage.getItem(FACE_DESCRIPTORS_KEY);
                 if (cachedData) {
                     try {
                         const descriptors = JSON.parse(cachedData).map(item => faceapi.LabeledFaceDescriptors.fromJSON(item));
-                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.45); 
+                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.5); 
                         scanFaceBtn.disabled = false;
-                        scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
-                        console.log('Face Matcher created from cache.');
+                        scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ';
+                        console.log('Face Matcher created from cache for:', cacheKey);
                         showLoader(false);
                         return;
                     } catch (e) {
                         console.error("Failed to parse cached descriptors, fetching again.", e);
-                        localStorage.removeItem(FACE_DESCRIPTORS_KEY);
+                        localStorage.removeItem(cacheKey);
                     }
                 }
-                
+
                 showLoader(true, 'កំពុងរៀបចំទិន្នន័យផ្ទៃមុខ...');
                 try {
                     let processedCount = 0;
@@ -410,12 +473,8 @@
                             try {
                                 const img = await faceapi.fetchImage(emp.photoUrl);
                                 const detections = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
-                                if (!detections) {
-                                    console.warn(`មិនអាចសម្គាល់ផ្ទៃមុខសម្រាប់: ${emp.name}`);
-                                    updateProgress();
-                                    return null;
-                                }
                                 updateProgress();
+                                if (!detections) return null;
                                 return new faceapi.LabeledFaceDescriptors(emp.id, [detections.descriptor]);
                             } catch (e) {
                                 console.error(`Failed to process image for ${emp.name}:`, e);
@@ -426,14 +485,13 @@
                     );
                     const validDescriptors = labeledFaceDescriptors.filter(d => d !== null);
                      if (validDescriptors.length > 0) {
-                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.45);
-                        localStorage.setItem(FACE_DESCRIPTORS_KEY, JSON.stringify(validDescriptors));
-                        console.log('Face Matcher created and saved to cache.');
+                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.5); 
+                        localStorage.setItem(cacheKey, JSON.stringify(validDescriptors));
+                        console.log('Face Matcher created and saved to cache:', cacheKey);
                         scanFaceBtn.disabled = false;
-                        scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
+                        scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ';
                     } else {
                         scanFaceBtn.textContent = 'មិនអាចបង្កើតទិន្នន័យផ្ទៃមុខបានទេ';
-                        console.error("No valid face descriptors could be created.");
                     }
                 } catch (error) {
                     console.error("Error creating face matcher: ", error);
@@ -448,10 +506,15 @@
                     alert('ប្រព័ន្ធសម្គាល់ផ្ទៃមុខមិនទាន់រួចរាល់ទេ។');
                     return;
                 }
-                matchBuffer = []; // Reset buffer on start
+                matchBuffer = []; 
+                isScanningPaused = false;
                 try {
-                    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                    videoStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: currentFacingMode } 
+                    });
                     faceVideo.srcObject = videoStream;
+                    faceVideo.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+                    faceCanvas.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
                     faceScannerModal.style.display = 'flex';
 
                     faceVideo.addEventListener('play', () => {
@@ -460,14 +523,11 @@
                                               
                         clearInterval(faceScanInterval);
 
-                        // --- OPTIMIZATION FOR SMOOTH PREVIEW ---
-                        const tinyFaceDetectorOptions = new faceapi.TinyFaceDetectorOptions({
-                            inputSize: 160, // Significantly reduces processing load for smoother video.
-                            scoreThreshold: 0.5
-                        });
+                        const tinyFaceDetectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
 
                         faceScanInterval = setInterval(async () => {
-                             // Use the fast model with optimized options for smooth real-time performance
+                            if (isScanningPaused) return; // Skip scan if paused in live mode
+
                             const detections = await faceapi.detectAllFaces(faceVideo, tinyFaceDetectorOptions).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             const context = faceCanvas.getContext('2d');
@@ -477,16 +537,11 @@
                                 const largestDetection = resizedDetections.sort((a,b) => b.detection.box.area - a.detection.box.area)[0];
                                 const bestMatch = faceMatcher.findBestMatch(largestDetection.descriptor);
                                 
-                                const box = largestDetection.detection.box;
-                                const drawOptions = {
+                                new faceapi.draw.DrawBox(largestDetection.detection.box, { 
                                     label: bestMatch.toString(),
-                                    boxColor: bestMatch.label === 'unknown' ? 'red' : 'green',
-                                    drawLabel: true
-                                };
-                                const drawBox = new faceapi.draw.DrawBox(box, drawOptions);
-                                drawBox.draw(faceCanvas);
+                                    boxColor: bestMatch.label === 'unknown' ? 'red' : 'green'
+                                }).draw(faceCanvas);
                                 
-                                // Smart Verification Logic
                                 if (bestMatch.label !== 'unknown') {
                                     matchBuffer.push(bestMatch.label);
                                 } else {
@@ -496,17 +551,21 @@
                                 if (matchBuffer.length >= CONSECUTIVE_MATCHES_REQUIRED) {
                                     const allSame = matchBuffer.every(val => val === matchBuffer[0]);
                                     if (allSame) {
-                                        stopFaceScanner();
-                                        handleCheckOutById(matchBuffer[0]);
-                                    } else {
-                                        matchBuffer = [];
+                                        if (isLiveModeActive) {
+                                            isScanningPaused = true;
+                                            handleScanResult(matchBuffer[0]);
+                                            setTimeout(() => { isScanningPaused = false; }, 3000); // Cooldown for 3 seconds
+                                        } else {
+                                            stopFaceScanner();
+                                            handleScanResult(matchBuffer[0]);
+                                        }
                                     }
+                                    matchBuffer = []; // Reset buffer after check
                                 }
-
                             } else {
                                 matchBuffer = [];
                             }
-                        }, 300); // Adjusted interval for performance balance
+                        }, 300); 
                     });
 
                 } catch (err) {
@@ -521,75 +580,98 @@
                     videoStream.getTracks().forEach(track => track.stop());
                 }
                 faceScannerModal.style.display = 'none';
-                const context = faceCanvas.getContext('2d');
-                context.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+                if (isLiveModeActive) {
+                    isLiveModeActive = false;
+                    scanFaceBtn.textContent = "ចាប់ផ្តើមកាមេរ៉ាផ្ទាល់";
+                }
             };
 
             // --- DATA & RENDERING FUNCTIONS ---
             const loadEmployeeData = async () => {
-                showLoader(true, 'កំពុងទាញយកទិន្នន័យបុគ្គលិក...');
+                showLoader(true, 'កំពុងទាញយកកាលវិភាគ...');
                 try {
                     const response = await fetch(READ_URL);
                     const csvText = await response.text();
-                    const data = csvText.split('\n').map(row => row.split(',').map(cell => cell.replace(/"/g, '')));
-                    employeeData = data.filter(row => row[0] && row[7] && row[22]).map(row => ({
-                        id: row[0].trim(), name: row[7], department: row[14] || 'N/A', photoUrl: row[22],
+                    allEmployeeData = csvText.split('\n').map(row => row.split(',').map(cell => cell.replace(/"/g, '')));
+                    
+                    const day = new Date().getDay();
+                    const shift = new Date().getHours() < 12 ? 'morning' : 'afternoon';
+                    const scheduleColIndex = [30, 24, 25, 26, 27, 28, 29][day]; 
+                    
+                    activeEmployeeData = allEmployeeData.filter(row => {
+                        if(row.length <= scheduleColIndex) return false;
+                        const schedule = row[scheduleColIndex]?.trim() || '';
+                        if (!schedule) return false;
+                        if (shift === 'morning') {
+                            return schedule === 'ពេញម៉ោង' || schedule === 'មួយព្រឹក';
+                        } else {
+                            return schedule === 'ពេញម៉ោង' || schedule === 'មួយរសៀល';
+                        }
+                    }).map(row => ({
+                        id: row[0].trim(), 
+                        name: row[7], 
+                        department: row[14] || 'N/A', 
+                        photoUrl: row[22],
                         searchValue: `${row[7]} (${row[0].trim()})`
-                    }));
+                    })).filter(emp => emp.id && emp.name && emp.photoUrl);
+
                     employeeDatalist.innerHTML = '';
-                    employeeData.forEach(emp => {
+                    activeEmployeeData.forEach(emp => {
                         const option = document.createElement('option');
                         option.value = emp.searchValue;
                         employeeDatalist.appendChild(option);
                     });
-                } catch (error) { console.error('Error fetching data:', error); } finally { showLoader(false); }
-            };
+                     console.log(`Loaded ${activeEmployeeData.length} employees for today's ${shift} shift.`);
 
-            const updateActiveBreakDatalist = () => {
-                const breaks = getBreaksFromStorage();
-                activeBreakDatalist.innerHTML = '';
-                breaks.forEach(breakEntry => {
-                    const option = document.createElement('option');
-                    option.value = `${breakEntry.name} (${breakEntry.id})`;
-                    activeBreakDatalist.appendChild(option);
-                });
-            };
-            
-            const saveData = async (data) => {
-                showLoader(true, 'កំពុងរក្សាទុក...');
-                try {
-                    await fetch(WRITE_URL, {
-                        method: 'POST', mode: 'no-cors', cache: 'no-cache',
-                        headers: { 'Content-Type': 'application/json' },
-                        redirect: 'follow', body: JSON.stringify(data)
-                    });
-                    return true;
-                } catch (error) { console.error('Save failed:', error); return false; } finally { showLoader(false); }
-            };
-            
-            const handleCheckOutById = (employeeId) => {
-                const selectedEmployee = employeeData.find(emp => emp.id === employeeId);
-                if (selectedEmployee) {
-                    const breaks = getBreaksFromStorage();
-                    if (breaks.some(b => b.id === selectedEmployee.id)) {
-                        alert(`បុគ្គលិកនេះ (${selectedEmployee.name}) បានចុះឈ្មោះចេញទៅក្រៅរួចហើយ។`);
-                        return;
-                    }
-                    const newBreak = {
-                        id: selectedEmployee.id, name: selectedEmployee.name, department: selectedEmployee.department,
-                        photoUrl: selectedEmployee.photoUrl, checkOutTime: new Date().toISOString()
-                    };
-                    breaks.push(newBreak);
-                    saveBreaksToStorage(breaks);
-                    renderBreakList();
-                    employeeInput.value = '';
-                } else {
-                    alert('រកមិនឃើញបុគ្គលិកដែលមាន ID: ' + employeeId);
+                } catch (error) { 
+                    console.error('Error fetching data:', error); 
+                    scanFaceBtn.textContent = 'មានបញ្ហាក្នុងការទាញទិន្នន័យ';
+                } finally { 
+                    showLoader(false); 
                 }
             };
 
+            const handleScanResult = async (employeeId) => {
+                const breaks = getBreaksFromStorage();
+                const isOnBreak = breaks.some(b => b.id === employeeId);
+                if (isOnBreak) {
+                    await handleCheckIn(employeeId);
+                } else {
+                    await handleCheckOut(employeeId);
+                }
+            };
+            
+            const handleCheckOut = async (employeeId) => {
+                const selectedEmployee = activeEmployeeData.find(emp => emp.id === employeeId);
+                if (!selectedEmployee) {
+                    const message = 'បុគ្គលិកនេះមិនមានក្នុងវេននេះទេ';
+                    if(isLiveModeActive) showScanOverlayMessage(message); else alert(message);
+                    return;
+                }
+
+                const breaks = getBreaksFromStorage();
+                if (breaks.some(b => b.id === employeeId)) {
+                    const message = `បុគ្គលិក (${selectedEmployee.name}) បានចុះឈ្មោះចេញទៅក្រៅរួចហើយ។`;
+                    if(isLiveModeActive) showScanOverlayMessage(message); else alert(message);
+                    return;
+                }
+
+                const newBreak = {
+                    id: selectedEmployee.id, name: selectedEmployee.name, department: selectedEmployee.department,
+                    photoUrl: selectedEmployee.photoUrl, checkOutTime: new Date().toISOString()
+                };
+                
+                breaks.push(newBreak);
+                saveBreaksToStorage(breaks);
+                renderBreakList();
+                const successMessage = `បុគ្គលិក ${selectedEmployee.name} បានស្កេនចេញត្រឹមត្រូវ`;
+                speak(successMessage);
+                if(isLiveModeActive) showScanOverlayMessage(successMessage);
+                employeeInput.value = '';
+            };
+
             const handleCheckIn = async (employeeId) => {
-                 const breaks = getBreaksFromStorage();
+                const breaks = getBreaksFromStorage();
                 const breakEntry = breaks.find(b => b.id === employeeId);
                 if (!breakEntry) return;
 
@@ -613,27 +695,41 @@
                 if (saveSuccess) {
                     const updatedBreaks = breaks.filter(b => b.id !== employeeId);
                     saveBreaksToStorage(updatedBreaks);
-                    const recordDiv = recordsContainer.querySelector(`.employee-record[data-id="${employeeId}"]`);
-                    if (recordDiv) {
-                        recordDiv.classList.add('completed');
-                        setTimeout(() => {
-                            recordDiv.style.opacity = '0';
-                            recordDiv.style.transform = 'translateX(50px)';
-                            setTimeout(() => renderBreakList(), 500);
-                        }, 1000);
-                    }
+                    renderBreakList();
+                    const successMessage = `បុគ្គលិក ${breakEntry.name} បានស្កេនចូលមកវិញត្រឹមត្រូវ`;
+                    speak(successMessage);
+                    if(isLiveModeActive) showScanOverlayMessage(successMessage);
                 } else {
                      alert('រក្សាទុកទិន្នន័យមិនสำเร็จ! សូមព្យាយាមម្តងទៀត។');
                 }
             };
+            
+            const saveData = async (data) => {
+                 showLoader(true, 'កំពុងរក្សាទុក...');
+                try {
+                    await fetch(WRITE_URL, {
+                        method: 'POST', mode: 'no-cors', cache: 'no-cache',
+                        headers: { 'Content-Type': 'application/json' },
+                        redirect: 'follow', body: JSON.stringify(data)
+                    });
+                    return true;
+                } catch (error) { console.error('Save failed:', error); return false; } finally { showLoader(false); }
+            };
+
+            const renderBreakList = () => {
+                const breaks = getBreaksFromStorage();
+                recordsContainer.innerHTML = '';
+                breaks.sort((a, b) => new Date(a.checkOutTime) - new Date(b.checkOutTime));
+                breaks.forEach(breakEntry => addEmployeeToUI(breakEntry));
+                checkOverdueBreaks();
+            };
 
             const addEmployeeToUI = (breakEntry) => {
-                 const checkOutTime = new Date(breakEntry.checkOutTime);
+                const checkOutTime = new Date(breakEntry.checkOutTime);
                 const recordDiv = document.createElement('div');
                 recordDiv.classList.add('employee-record');
                 recordDiv.setAttribute('data-id', breakEntry.id);
-                recordDiv.setAttribute('data-search-term', `${breakEntry.name} ${breakEntry.id}`.toLowerCase());
-
+                
                 recordDiv.innerHTML = `
                     <div class="employee-photo">
                         <img src="${breakEntry.photoUrl}" alt="Photo of ${breakEntry.name}" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR}';">
@@ -642,8 +738,6 @@
                         <h4>${breakEntry.name} (${breakEntry.id})</h4>
                         <p><strong>ផ្នែក:</strong> ${breakEntry.department}</p>
                         <p><strong>ម៉ោងចេញ:</strong> <span class="start-time">${checkOutTime.toLocaleTimeString('en-GB')}</span></p>
-                        <p><strong>ម៉ោងចូល:</strong> <span class="stop-time">--:--:--</span></p>
-                        <p><strong>រយៈពេលសម្រាក:</strong> <span class="duration">--</span></p>
                         <p class="overdue-status"></p>
                     </div>
                     <div class="employee-actions">
@@ -654,7 +748,7 @@
                 recordsContainer.appendChild(recordDiv);
 
                 const checkInBtn = recordDiv.querySelector('.btn-check-in');
-                checkInBtn.addEventListener('click', () => handleCheckIn(breakEntry.id), { once: true });
+                checkInBtn.addEventListener('click', () => handleCheckIn(breakEntry.id));
 
                 const deleteBtn = recordDiv.querySelector('.btn-delete');
                 deleteBtn.addEventListener('click', () => {
@@ -666,76 +760,59 @@
                 });
             };
 
-            const renderBreakList = () => {
-                recordsContainer.innerHTML = '';
-                const breaks = getBreaksFromStorage();
-                breaks.sort((a, b) => new Date(a.checkOutTime) - new Date(b.checkOutTime));
-                breaks.forEach(breakEntry => addEmployeeToUI(breakEntry));
-                updateActiveBreakDatalist();
-                checkOverdueBreaks();
-            };
-
-            // --- MAIN INITIALIZATION (RESTRUCTURED) ---
+            // --- MAIN INITIALIZATION ---
             async function initializeApp() {
                 setKhmerDate();
                 renderBreakList();
-                
-                const modelsPromise = loadFaceApiModels();
-                
-                await loadEmployeeData();
 
+                const modelsPromise = loadFaceApiModels();
+                await loadEmployeeData();
                 await modelsPromise;
-                if(employeeData.length > 0) {
-                    await getOrCreateFaceMatcher(employeeData);
+
+                if(activeEmployeeData.length > 0) {
+                    await getOrCreateFaceMatcher(activeEmployeeData);
                 } else {
-                    scanFaceBtn.textContent = 'គ្មានទិន្នន័យបុគ្គលិក';
+                    scanFaceBtn.textContent = 'គ្មានបុគ្គលិកក្នុងវេននេះ';
                 }
 
-                resetInactivityTimer();
-                resetFilterTimer();
                 setInterval(checkOverdueBreaks, 30000);
             }
 
             // --- EVENT LISTENERS ---
+            liveModeCheckbox.addEventListener('change', (e) => {
+                if(e.target.checked) {
+                    scanFaceBtn.textContent = "ចាប់ផ្តើមកាមេរ៉ាផ្ទាល់";
+                } else {
+                    scanFaceBtn.textContent = "ស្កេនផ្ទៃមុខ";
+                }
+            });
+
             employeeInput.addEventListener('input', (e) => {
                 const value = e.target.value;
-                const selectedEmployee = employeeData.find(emp => emp.searchValue === value);
+                const selectedEmployee = activeEmployeeData.find(emp => emp.searchValue === value);
                 if (selectedEmployee) {
-                    handleCheckOutById(selectedEmployee.id);
+                    handleCheckOut(selectedEmployee.id);
                 }
             });
             
-            scanFaceBtn.addEventListener('click', startFaceScanner);
-            closeFaceModalBtn.addEventListener('click', stopFaceScanner);
-
-            filterInput.addEventListener('input', (e) => {
-                const searchTerm = e.target.value.toLowerCase();
-                const records = recordsContainer.querySelectorAll('.employee-record');
-                records.forEach(record => {
-                    const recordSearchTerm = record.getAttribute('data-search-term');
-                    if (recordSearchTerm.includes(searchTerm)) {
-                        record.style.display = 'grid';
+            scanFaceBtn.addEventListener('click', () => {
+                if (liveModeCheckbox.checked) {
+                    if (isLiveModeActive) {
+                        stopFaceScanner();
                     } else {
-                        record.style.display = 'none';
+                        isLiveModeActive = true;
+                        scanFaceBtn.textContent = "បញ្ឈប់កាមេរ៉ាផ្ទាល់";
+                        startFaceScanner();
                     }
-                });
+                } else {
+                    startFaceScanner();
+                }
             });
-
-            mainTitle.addEventListener('click', () => {
-                showSelectionCard();
-                resetInactivityTimer();
-            });
-
-            recordsCardTitle.addEventListener('click', () => {
-                showFilterBox();
-                resetFilterTimer();
-            });
-
-            ['mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
-                document.addEventListener(event, () => {
-                    resetInactivityTimer();
-                    resetFilterTimer();
-                });
+            closeFaceModalBtn.addEventListener('click', stopFaceScanner);
+            switchCameraBtn.addEventListener('click', () => {
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                stopFaceScanner();
+                startFaceScanner();
             });
             
             initializeApp();
