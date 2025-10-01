@@ -351,21 +351,32 @@
                     }
                 }
                 
-                showLoader(true, 'កំពុងរៀនសម្គាល់ផ្ទៃមុខ (អាចចំណាយពេលយូរសម្រាប់ពេលដំបូង)...');
+                showLoader(true, 'កំពុងរៀបចំទិន្នន័យផ្ទៃមុខ...');
                 try {
+                    let processedCount = 0;
+                    const totalEmployees = employeeList.length;
+                    
+                    const updateProgress = () => {
+                        processedCount++;
+                        const percentage = Math.round((processedCount / totalEmployees) * 100);
+                        showLoader(true, `កំពុងរៀបចំទិន្នន័យផ្ទៃមុខ... (${processedCount}/${totalEmployees}) ${percentage}%`);
+                    };
+
                     const labeledFaceDescriptors = await Promise.all(
                         employeeList.map(async (emp) => {
                             try {
                                 const img = await faceapi.fetchImage(emp.photoUrl);
-                                // Use the more accurate model for initial learning
                                 const detections = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
                                 if (!detections) {
                                     console.warn(`មិនអាចសម្គាល់ផ្ទៃមុខសម្រាប់: ${emp.name}`);
+                                    updateProgress();
                                     return null;
                                 }
+                                updateProgress();
                                 return new faceapi.LabeledFaceDescriptors(emp.id, [detections.descriptor]);
                             } catch (e) {
                                 console.error(`Failed to process image for ${emp.name}:`, e);
+                                updateProgress();
                                 return null;
                             }
                         })
@@ -405,11 +416,9 @@
                         
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            // Use the faster model for real-time video processing
                             const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             faceCanvas.getContext('2d').clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-                            // faceapi.draw.drawDetections(faceCanvas, resizedDetections); // Optional: can be commented out to save resources
                             
                             if (detections.length > 0) {
                                 const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
@@ -418,7 +427,7 @@
                                     handleCheckOutById(bestMatch.label);
                                 }
                             }
-                        }, 300); // Reduced interval for smoother feel
+                        }, 300);
                     });
 
                 } catch (err) {
