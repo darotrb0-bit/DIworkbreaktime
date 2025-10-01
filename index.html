@@ -191,7 +191,7 @@
                     <datalist id="employee-list-data"></datalist>
                 </div>
                  <div class="form-group">
-                    <button id="scan-face-btn" class="btn btn-scan" disabled>កំពុងដំណើរការប្រព័ន្ធសម្គាល់ផ្ទៃមុខ...</button>
+                    <button id="scan-face-btn" class="btn btn-scan" disabled>កំពុងរៀបចំប្រព័ន្ធសម្គាល់ផ្ទៃមុខ...</button>
                 </div>
             </div>
 
@@ -233,6 +233,7 @@
             const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=${RANGE}`;
             const WRITE_URL = 'https://script.google.com/macros/s/AKfycbxCekjXECxkU-hmWzik1wChzCF7YpWxb7ZA1RHazuxMaUInNRU2nZoe7uh0sdzkXxr6/exec';
             const STORAGE_KEY = 'activeBreaks';
+            const FACE_DESCRIPTORS_KEY = 'faceDescriptorsCache';
             const DEFAULT_AVATAR = 'https://i.stack.imgur.com/34AD2.jpg';
             const OVERDUE_MINUTES = 15;
 
@@ -317,36 +318,61 @@
                 });
             };
 
-            // --- FACE RECOGNITION FUNCTIONS ---
+            // --- FACE RECOGNITION FUNCTIONS (OPTIMIZED & DETAILED) ---
             async function loadFaceApiModels() {
-                showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ...');
+                showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ (លម្អិត)...');
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
                 await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
                 isFaceApiReady = true;
+                console.log('Face API models loaded (SsdMobilenetv1).');
             }
 
-            async function createFaceMatcher(employeeList) {
+            async function getOrCreateFaceMatcher(employeeList) {
                 if (!isFaceApiReady) return;
-                showLoader(true, 'កំពុងរៀនសម្គាល់ផ្ទៃមុខបុគ្គលិក...');
+
+                const cachedData = localStorage.getItem(FACE_DESCRIPTORS_KEY);
+                if (cachedData) {
+                    try {
+                        const descriptors = JSON.parse(cachedData).map(item => faceapi.LabeledFaceDescriptors.fromJSON(item));
+                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.6); // Use 0.6 for SsdMobilenetv1
+                        scanFaceBtn.disabled = false;
+                        scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
+                        console.log('Face Matcher created from cache.');
+                        showLoader(false);
+                        return;
+                    } catch (e) {
+                        console.error("Failed to parse cached descriptors, fetching again.", e);
+                        localStorage.removeItem(FACE_DESCRIPTORS_KEY);
+                    }
+                }
+                
+                showLoader(true, 'កំពុងរៀនសម្គាល់ផ្ទៃមុខ (អាចចំណាយពេលយូរសម្រាប់ครั้งដំបូង)...');
                 try {
                     const labeledFaceDescriptors = await Promise.all(
                         employeeList.map(async (emp) => {
-                            const img = await faceapi.fetchImage(emp.photoUrl);
-                            const detections = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-                            if (!detections) {
-                                console.warn(`មិនអាចសម្គាល់ផ្ទៃមុខសម្រាប់: ${emp.name}`);
+                            try {
+                                const img = await faceapi.fetchImage(emp.photoUrl);
+                                const detections = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
+                                if (!detections) {
+                                    console.warn(`មិនអាចសម្គាល់ផ្ទៃមុខសម្រាប់: ${emp.name}`);
+                                    return null;
+                                }
+                                return new faceapi.LabeledFaceDescriptors(emp.id, [detections.descriptor]);
+                            } catch (e) {
+                                console.error(`Failed to process image for ${emp.name}:`, e);
                                 return null;
                             }
-                            return new faceapi.LabeledFaceDescriptors(emp.id, [detections.descriptor]);
                         })
                     );
                     const validDescriptors = labeledFaceDescriptors.filter(d => d !== null);
                      if (validDescriptors.length > 0) {
-                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.5); // 0.5 is the distance threshold
+                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6); // Use 0.6 for SsdMobilenetv1
+                        localStorage.setItem(FACE_DESCRIPTORS_KEY, JSON.stringify(validDescriptors));
+                        console.log('Face Matcher created and saved to cache.');
                         scanFaceBtn.disabled = false;
                         scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
                     } else {
@@ -377,7 +403,7 @@
                         
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             faceCanvas.getContext('2d').clearRect(0, 0, faceCanvas.width, faceCanvas.height);
                             faceapi.draw.drawDetections(faceCanvas, resizedDetections);
@@ -385,7 +411,6 @@
                             if (detections.length > 0) {
                                 const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
                                 if (bestMatch.label !== 'unknown') {
-                                    // Match found!
                                     stopFaceScanner();
                                     handleCheckOutById(bestMatch.label);
                                 }
@@ -426,10 +451,6 @@
                         option.value = emp.searchValue;
                         employeeDatalist.appendChild(option);
                     });
-                    
-                    if (isFaceApiReady) {
-                       await createFaceMatcher(employeeData);
-                    }
                 } catch (error) { console.error('Error fetching data:', error); } finally { showLoader(false); }
             };
 
@@ -560,16 +581,25 @@
                 breaks.sort((a, b) => new Date(a.checkOutTime) - new Date(b.checkOutTime));
                 breaks.forEach(breakEntry => addEmployeeToUI(breakEntry));
                 updateActiveBreakDatalist();
-                checkOverdueBreaks();
+                checkOverduebreaks();
             };
 
-            // --- MAIN INITIALIZATION ---
+            // --- MAIN INITIALIZATION (RESTRUCTURED) ---
             async function initializeApp() {
                 setKhmerDate();
                 renderBreakList();
-                await loadFaceApiModels();
-                await loadEmployeeData();
                 
+                const modelsPromise = loadFaceApiModels();
+                
+                await loadEmployeeData();
+
+                await modelsPromise;
+                if(employeeData.length > 0) {
+                    await getOrCreateFaceMatcher(employeeData);
+                } else {
+                    scanFaceBtn.textContent = 'គ្មានទិន្នន័យបុគ្គលិក';
+                }
+
                 resetInactivityTimer();
                 resetFilterTimer();
                 setInterval(checkOverdueBreaks, 30000);
