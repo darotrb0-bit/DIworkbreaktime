@@ -320,15 +320,16 @@
 
             // --- FACE RECOGNITION FUNCTIONS (OPTIMIZED & DETAILED) ---
             async function loadFaceApiModels() {
-                showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ (លម្អិត)...');
+                showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ...');
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // For accurate initial detection
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL), // For fast real-time detection
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
                 isFaceApiReady = true;
-                console.log('Face API models loaded (SsdMobilenetv1).');
+                console.log('Face API models loaded.');
             }
 
             async function getOrCreateFaceMatcher(employeeList) {
@@ -338,7 +339,7 @@
                 if (cachedData) {
                     try {
                         const descriptors = JSON.parse(cachedData).map(item => faceapi.LabeledFaceDescriptors.fromJSON(item));
-                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.6); // Use 0.6 for SsdMobilenetv1
+                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.6);
                         scanFaceBtn.disabled = false;
                         scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
                         console.log('Face Matcher created from cache.');
@@ -356,6 +357,7 @@
                         employeeList.map(async (emp) => {
                             try {
                                 const img = await faceapi.fetchImage(emp.photoUrl);
+                                // Use the more accurate model for initial learning
                                 const detections = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
                                 if (!detections) {
                                     console.warn(`មិនអាចសម្គាល់ផ្ទៃមុខសម្រាប់: ${emp.name}`);
@@ -370,7 +372,7 @@
                     );
                     const validDescriptors = labeledFaceDescriptors.filter(d => d !== null);
                      if (validDescriptors.length > 0) {
-                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6); // Use 0.6 for SsdMobilenetv1
+                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6);
                         localStorage.setItem(FACE_DESCRIPTORS_KEY, JSON.stringify(validDescriptors));
                         console.log('Face Matcher created and saved to cache.');
                         scanFaceBtn.disabled = false;
@@ -403,10 +405,11 @@
                         
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptors();
+                            // Use the faster model for real-time video processing
+                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             faceCanvas.getContext('2d').clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-                            faceapi.draw.drawDetections(faceCanvas, resizedDetections);
+                            // faceapi.draw.drawDetections(faceCanvas, resizedDetections); // Optional: can be commented out to save resources
                             
                             if (detections.length > 0) {
                                 const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
@@ -415,7 +418,7 @@
                                     handleCheckOutById(bestMatch.label);
                                 }
                             }
-                        }, 500);
+                        }, 300); // Reduced interval for smoother feel
                     });
 
                 } catch (err) {
@@ -581,7 +584,7 @@
                 breaks.sort((a, b) => new Date(a.checkOutTime) - new Date(b.checkOutTime));
                 breaks.forEach(breakEntry => addEmployeeToUI(breakEntry));
                 updateActiveBreakDatalist();
-                checkOverduebreaks();
+                checkOverdueBreaks();
             };
 
             // --- MAIN INITIALIZATION (RESTRUCTURED) ---
