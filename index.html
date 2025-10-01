@@ -459,9 +459,16 @@
                         faceapi.matchDimensions(faceCanvas, displaySize);
                                               
                         clearInterval(faceScanInterval);
+
+                        // --- OPTIMIZATION FOR SMOOTH PREVIEW ---
+                        const tinyFaceDetectorOptions = new faceapi.TinyFaceDetectorOptions({
+                            inputSize: 160, // Significantly reduces processing load for smoother video.
+                            scoreThreshold: 0.5
+                        });
+
                         faceScanInterval = setInterval(async () => {
-                             // Use the fast model for smooth real-time performance
-                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                             // Use the fast model with optimized options for smooth real-time performance
+                            const detections = await faceapi.detectAllFaces(faceVideo, tinyFaceDetectorOptions).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             const context = faceCanvas.getContext('2d');
                             context.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
@@ -499,7 +506,7 @@
                             } else {
                                 matchBuffer = [];
                             }
-                        }, 200); // Faster interval for smoother video
+                        }, 300); // Adjusted interval for performance balance
                     });
 
                 } catch (err) {
