@@ -323,8 +323,7 @@
                 showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ...');
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // For accurate initial detection
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL), // For fast real-time detection
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
@@ -339,7 +338,8 @@
                 if (cachedData) {
                     try {
                         const descriptors = JSON.parse(cachedData).map(item => faceapi.LabeledFaceDescriptors.fromJSON(item));
-                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.6);
+                        // Increased precision: Stricter threshold for matching
+                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.5); 
                         scanFaceBtn.disabled = false;
                         scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
                         console.log('Face Matcher created from cache.');
@@ -383,7 +383,8 @@
                     );
                     const validDescriptors = labeledFaceDescriptors.filter(d => d !== null);
                      if (validDescriptors.length > 0) {
-                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6);
+                        // Increased precision: Stricter threshold for matching
+                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.5);
                         localStorage.setItem(FACE_DESCRIPTORS_KEY, JSON.stringify(validDescriptors));
                         console.log('Face Matcher created and saved to cache.');
                         scanFaceBtn.disabled = false;
@@ -416,7 +417,8 @@
                         
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                            // Increased precision: Use the more accurate (but slower) model for real-time detection
+                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             faceCanvas.getContext('2d').clearRect(0, 0, faceCanvas.width, faceCanvas.height);
                             
@@ -427,7 +429,7 @@
                                     handleCheckOutById(bestMatch.label);
                                 }
                             }
-                        }, 300);
+                        }, 500); // Interval adjusted slightly for the more intensive model
                     });
 
                 } catch (err) {
@@ -516,7 +518,7 @@
 
                 const checkOutTime = new Date(breakEntry.checkOutTime);
                 const checkInTime = new Date();
-                const diffMs = checkInTime - checkOutTime;
+                const diffMs = checkInTime - checkInTime;
                 const diffHrs = Math.floor(diffMs / 3600000);
                 const diffMins = Math.round((diffMs % 3600000) / 60000);
                 const duration = `${diffHrs} ម៉ោង ${diffMins} នាទី`;
