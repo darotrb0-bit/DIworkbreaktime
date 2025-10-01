@@ -236,6 +236,7 @@
             const FACE_DESCRIPTORS_KEY = 'faceDescriptorsCache';
             const DEFAULT_AVATAR = 'https://i.stack.imgur.com/34AD2.jpg';
             const OVERDUE_MINUTES = 15;
+            const CONSECUTIVE_MATCHES_REQUIRED = 3; // Require 3 consecutive matches
 
             // --- DOM ELEMENTS ---
             const mainTitle = document.querySelector('header h1');
@@ -264,6 +265,7 @@
             let faceMatcher;
             let faceScanInterval;
             let isFaceApiReady = false;
+            let matchBuffer = []; // Buffer for consecutive matches
 
             // --- HELPER FUNCTIONS ---
             const showLoader = (show, message = '') => {
@@ -338,8 +340,7 @@
                 if (cachedData) {
                     try {
                         const descriptors = JSON.parse(cachedData).map(item => faceapi.LabeledFaceDescriptors.fromJSON(item));
-                        // Increased precision: Stricter threshold for matching
-                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.5); 
+                        faceMatcher = new faceapi.FaceMatcher(descriptors, 0.45); 
                         scanFaceBtn.disabled = false;
                         scanFaceBtn.textContent = 'ស្កេនផ្ទៃមុខ ដើម្បី Check-Out';
                         console.log('Face Matcher created from cache.');
@@ -383,8 +384,7 @@
                     );
                     const validDescriptors = labeledFaceDescriptors.filter(d => d !== null);
                      if (validDescriptors.length > 0) {
-                        // Increased precision: Stricter threshold for matching
-                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.5);
+                        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.45);
                         localStorage.setItem(FACE_DESCRIPTORS_KEY, JSON.stringify(validDescriptors));
                         console.log('Face Matcher created and saved to cache.');
                         scanFaceBtn.disabled = false;
@@ -406,6 +406,7 @@
                     alert('ប្រព័ន្ធសម្គាល់ផ្ទៃមុខមិនទាន់រួចរាល់ទេ។');
                     return;
                 }
+                matchBuffer = []; // Reset buffer on start
                 try {
                     videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                     faceVideo.srcObject = videoStream;
@@ -415,21 +416,49 @@
                         const displaySize = { width: faceVideo.clientWidth, height: faceVideo.clientHeight };
                         faceapi.matchDimensions(faceCanvas, displaySize);
                         
+                        const drawBox = new faceapi.draw.DrawBox(resizedDetections[0].detection.box, { label: bestMatch.toString() });
+                        drawBox.draw(faceCanvas);
+                        
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            // Increased precision: Use the more accurate (but slower) model for real-time detection
                             const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                            faceCanvas.getContext('2d').clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+                            const context = faceCanvas.getContext('2d');
+                            context.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
                             
                             if (detections.length > 0) {
                                 const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
+                                
+                                // Draw feedback on canvas
+                                const box = resizedDetections[0].detection.box;
+                                const drawOptions = {
+                                    label: bestMatch.toString(),
+                                    boxColor: bestMatch.label === 'unknown' ? 'red' : 'green'
+                                };
+                                const drawBox = new faceapi.draw.DrawBox(box, drawOptions);
+                                drawBox.draw(faceCanvas);
+                                
+                                // Smart Verification Logic
                                 if (bestMatch.label !== 'unknown') {
-                                    stopFaceScanner();
-                                    handleCheckOutById(bestMatch.label);
+                                    matchBuffer.push(bestMatch.label);
+                                } else {
+                                    matchBuffer = []; // Reset if unknown face detected
                                 }
+
+                                if (matchBuffer.length >= CONSECUTIVE_MATCHES_REQUIRED) {
+                                    const allSame = matchBuffer.every(val => val === matchBuffer[0]);
+                                    if (allSame) {
+                                        stopFaceScanner();
+                                        handleCheckOutById(matchBuffer[0]);
+                                    } else {
+                                        matchBuffer = []; // Reset if matches are inconsistent
+                                    }
+                                }
+
+                            } else {
+                                matchBuffer = []; // Reset if no face is detected
                             }
-                        }, 500); // Interval adjusted slightly for the more intensive model
+                        }, 500);
                     });
 
                 } catch (err) {
@@ -518,7 +547,7 @@
 
                 const checkOutTime = new Date(breakEntry.checkOutTime);
                 const checkInTime = new Date();
-                const diffMs = checkInTime - checkInTime;
+                const diffMs = checkInTime - checkOutTime; // Corrected calculation
                 const diffHrs = Math.floor(diffMs / 3600000);
                 const diffMins = Math.round((diffMs % 3600000) / 60000);
                 const duration = `${diffHrs} ម៉ោង ${diffMins} នាទី`;
