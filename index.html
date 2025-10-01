@@ -366,7 +366,8 @@
                 showLoader(true, 'កំពុងដំណើរការម៉ូឌែលសម្គាល់ផ្ទៃមុខ...');
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // For accurate initial detection
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL), // For fast real-time detection
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
@@ -459,17 +460,16 @@
                                               
                         clearInterval(faceScanInterval);
                         faceScanInterval = setInterval(async () => {
-                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptors();
+                             // Use the fast model for smooth real-time performance
+                            const detections = await faceapi.detectAllFaces(faceVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
                             const resizedDetections = faceapi.resizeResults(detections, displaySize);
                             const context = faceCanvas.getContext('2d');
                             context.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
                             
                             if (detections.length > 0) {
-                                // Only consider the largest face detected
                                 const largestDetection = resizedDetections.sort((a,b) => b.detection.box.area - a.detection.box.area)[0];
                                 const bestMatch = faceMatcher.findBestMatch(largestDetection.descriptor);
                                 
-                                // Draw feedback on canvas
                                 const box = largestDetection.detection.box;
                                 const drawOptions = {
                                     label: bestMatch.toString(),
@@ -483,7 +483,7 @@
                                 if (bestMatch.label !== 'unknown') {
                                     matchBuffer.push(bestMatch.label);
                                 } else {
-                                    matchBuffer = []; // Reset if unknown face detected
+                                    matchBuffer = [];
                                 }
 
                                 if (matchBuffer.length >= CONSECUTIVE_MATCHES_REQUIRED) {
@@ -492,19 +492,19 @@
                                         stopFaceScanner();
                                         handleCheckOutById(matchBuffer[0]);
                                     } else {
-                                        matchBuffer = []; // Reset if matches are inconsistent
+                                        matchBuffer = [];
                                     }
                                 }
 
                             } else {
-                                matchBuffer = []; // Reset if no face is detected
+                                matchBuffer = [];
                             }
-                        }, 500);
+                        }, 200); // Faster interval for smoother video
                     });
 
                 } catch (err) {
                     console.error("Error accessing camera: ", err);
-                    alert("មិនអាចបើកកាមេរ៉ាបានទេ។ សូមពិនិត្យการអនុញ្ញាត (Permission)។");
+                    alert("មិនអាចបើកកាមេរ៉ាបានទេ។ សូមពិនិត្យការអនុញ្ញាត (Permission)។");
                 }
             };
             
@@ -588,7 +588,7 @@
 
                 const checkOutTime = new Date(breakEntry.checkOutTime);
                 const checkInTime = new Date();
-                const diffMs = checkInTime - checkOutTime; // Corrected calculation
+                const diffMs = checkInTime - checkOutTime;
                 const diffHrs = Math.floor(diffMs / 3600000);
                 const diffMins = Math.round((diffMs % 3600000) / 60000);
                 const duration = `${diffHrs} ម៉ោង ${diffMins} នាទី`;
